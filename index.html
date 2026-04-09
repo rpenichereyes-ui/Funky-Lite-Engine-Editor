@@ -10,12 +10,10 @@
     .header { text-align: center; padding: 10px 0; border-bottom: 2px solid #333; margin-bottom: 15px; }
     .header h1 { color: var(--primary); font-size: 20px; text-transform: uppercase; margin: 0; }
 
-    /* PREVIEW FLOTANTE */
     .preview-floater { background: #000; border: 2px solid var(--primary); border-radius: 12px; padding: 10px; text-align: center; position: sticky; top: 10px; z-index: 100; margin-bottom: 20px; box-shadow: 0 5px 15px rgba(0,0,0,0.8); }
     #previewCanvas { background: #1a1a1a; width: 120px; height: 120px; border-radius: 6px; image-rendering: pixelated; display: block; margin: 0 auto; }
     #frameCounter { font-size: 10px; color: #888; margin-top: 5px; font-family: monospace; }
 
-    /* CARDS */
     .card { background: var(--card); border-radius: 12px; padding: 15px; margin-bottom: 20px; border: 1px solid #222; }
     .card-title { font-size: 13px; font-weight: bold; margin-bottom: 15px; text-transform: uppercase; padding-left: 10px; }
     .mode-1 { border-top: 4px solid var(--primary); } .mode-1 .card-title { color: var(--primary); border-left: 4px solid var(--primary); }
@@ -64,7 +62,7 @@
         <label>XML Original</label><input type="file" id="optXmlIn" accept=".xml">
         <label>Escala: <span id="valScale">0.5</span></label>
         <input type="range" id="optScale" min="0.1" max="0.9" step="0.1" value="0.5" oninput="document.getElementById('valScale').innerText=this.value">
-        <button class="btn btn-blue" onclick="processOptimization()">Optimizar Ambos</button>
+        <button class="btn btn-blue" onclick="processOptimization()">Optimizar y Descargar Pack</button>
     </div>
 
     <div class="card mode-3">
@@ -74,7 +72,7 @@
         <button class="btn btn-purple" onclick="adaptChart()">Reparar y Adaptar Chart</button>
     </div>
 
-    <div id="status">LISTO PARA REPARAR</div>
+    <div id="status">LISTO PARA TRABAJAR</div>
 </div>
 
 <script>
@@ -82,7 +80,7 @@
     var frames = [];
     var animInt = null;
 
-    // --- MODO 1 ---
+    // --- MODO 1: LÓGICA ---
     document.getElementById('gridIn').onchange = function(e){
         var r = new FileReader();
         r.onload = function(ev){ imgSheet.src = ev.target.result; };
@@ -117,33 +115,60 @@
         save(xml + '</TextureAtlas>', "sprite.xml", "text/xml");
     }
 
-    // --- MODO 2 ---
+    // --- MODO 2: OPTIMIZACIÓN (FIXED) ---
     function processOptimization() {
-        var p = document.getElementById('optPngIn').files[0], x = document.getElementById('optXmlIn').files[0], s = parseFloat(document.getElementById('optScale').value);
-        if(!p || !x) return alert("Faltan archivos");
+        var pFile = document.getElementById('optPngIn').files[0], xFile = document.getElementById('optXmlIn').files[0], s = parseFloat(document.getElementById('optScale').value);
+        if(!pFile || !xFile) return alert("Selecciona ambos archivos (PNG y XML)");
+
+        var baseName = pFile.name.split('.').slice(0, -1).join('.'); // Obtiene el nombre sin extensión
         var r = new FileReader();
+        
         r.onload = function(e){
             var i = new Image();
             i.onload = function(){
-                var c = document.createElement('canvas'); c.width = i.width*s; c.height = i.height*s;
-                c.getContext('2d').drawImage(i,0,0,c.width,c.height);
-                var a = document.createElement('a'); a.href = c.toDataURL(); a.download="opt.png"; a.click();
+                // Procesar PNG
+                var c = document.createElement('canvas'); 
+                c.width = Math.round(i.width * s); 
+                c.height = Math.round(i.height * s);
+                var ctx = c.getContext('2d');
+                ctx.imageSmoothingEnabled = false; // Mantiene los bordes nítidos
+                ctx.drawImage(i, 0, 0, c.width, c.height);
+                
+                // Descargar PNG con mismo nombre
+                var a = document.createElement('a');
+                a.href = c.toDataURL("image/png");
+                a.download = baseName + ".png";
+                a.click();
+
+                // Procesar XML
                 var rx = new FileReader();
                 rx.onload = function(ex){
-                    var d = new DOMParser().parseFromString(ex.target.result, "text/xml"), t = d.getElementsByTagName("SubTexture");
-                    for(var j=0; j<t.length; j++){
-                        ["x","y","width","height"].forEach(a => t[j].setAttribute(a, Math.round(t[j].getAttribute(a)*s)));
+                    var parser = new DOMParser();
+                    var xmlDoc = parser.parseFromString(ex.target.result, "text/xml");
+                    var tags = xmlDoc.getElementsByTagName("SubTexture");
+
+                    for(var j=0; j<tags.length; j++){
+                        // Escalar Atributos principales y Offsets (frameX, etc)
+                        var attrs = ["x", "y", "width", "height", "frameX", "frameY", "frameWidth", "frameHeight"];
+                        attrs.forEach(attr => {
+                            if(tags[j].getAttribute(attr)) {
+                                var val = parseFloat(tags[j].getAttribute(attr));
+                                tags[j].setAttribute(attr, Math.round(val * s));
+                            }
+                        });
                     }
-                    save(new XMLSerializer().serializeToString(d), "opt.xml", "text/xml");
+                    var finalXml = new XMLSerializer().serializeToString(xmlDoc);
+                    save(finalXml, baseName + ".xml", "text/xml");
+                    document.getElementById('status').innerText = "✓ " + baseName.toUpperCase() + " OPTIMIZADO";
                 };
-                rx.readAsText(x);
+                rx.readAsText(xFile);
             };
             i.src = e.target.result;
         };
-        r.readAsDataURL(p);
+        r.readAsDataURL(pFile);
     }
 
-    // --- MODO 3: EL REPARADOR ---
+    // --- MODO 3: CHART FIXER ---
     function adaptChart() {
         var f = document.getElementById('jsonIn').files[0];
         if(!f) return;
@@ -151,9 +176,7 @@
         r.onload = function(e) {
             try {
                 var raw = JSON.parse(e.target.result);
-                // Extraer datos sin importar si están en .song o raíz
                 var d = raw.song && typeof raw.song !== 'string' ? raw.song : (raw.canción || raw);
-                
                 var adapted = { "song": {
                     "song": (d.song || "unknown").toLowerCase(),
                     "notes": d.notes || [],
@@ -166,25 +189,17 @@
                     "speed": parseFloat(d.speed || d.scrollSpeed) || 2.0,
                     "validScore": true
                 }};
-
-                // Limpieza Profunda de Notas para evitar el crash de la imagen
                 if(adapted.song.notes) {
                     adapted.song.notes.forEach(s => {
                         if(s.sectionNotes) {
-                            s.sectionNotes = s.sectionNotes.filter(n => n.length >= 3).map(n => {
-                                // Solo permitimos [Tiempo, Dirección, Longitud]. 
-                                // Borramos el 4to y 5to parámetro que causan error en 0.5.1
-                                return [n[0], n[1], n[2]]; 
-                            });
+                            s.sectionNotes = s.sectionNotes.filter(n => n.length >= 3).map(n => [n[0], n[1], n[2]]);
                         }
                         if(s.lengthInSteps === undefined) s.lengthInSteps = 16;
-                        // Forzar que mustHitSection exista
                         if(s.mustHitSection === undefined) s.mustHitSection = true;
                     });
                 }
-
                 save(JSON.stringify(adapted, null, "\t"), adapted.song.song + "_fixed.json", "application/json");
-                document.getElementById('status').innerText = "✓ REPARADO PARA 0.5.1";
+                document.getElementById('status').innerText = "✓ CHART REPARADO";
             } catch(err) { alert("Error en JSON"); }
         };
         r.readAsText(f);
@@ -192,8 +207,11 @@
 
     function save(c, n, t) {
         var b = new Blob([c], {type: t}), a = document.createElement('a');
-        a.href = window.URL.createObjectURL(b); a.download = n; a.click();
+        var url = window.URL.createObjectURL(b);
+        a.href = url; a.download = n; a.click();
+        setTimeout(() => window.URL.revokeObjectURL(url), 100);
     }
 </script>
 </body>
 </html>
+
