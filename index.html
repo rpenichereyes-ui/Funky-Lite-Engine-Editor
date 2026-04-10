@@ -25,7 +25,6 @@
         .sheet-viewer { background: #000; height: 45vh; overflow: auto; position: relative; border: 1px solid #333; border-radius: 8px; background-image: conic-gradient(#111 90deg, #181818 90deg 180deg, #111 180deg 270deg, #181818 270deg); background-size: 20px 20px; }
         #mainCanvas { display: block; image-rendering: pixelated; }
 
-        /* Estilos de Preview */
         .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
         .preview-box { background: #000; border: 1px solid #444; border-radius: 8px; padding: 5px; text-align: center; }
         .p-canvas { width: 100%; height: 100px; image-rendering: pixelated; object-fit: contain; background: transparent; }
@@ -34,6 +33,13 @@
         label { font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 5px; }
         input { width: 100%; background: #222; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; margin-bottom: 10px; }
         
+        /* Lista de Frames */
+        #frameList { max-height: 150px; overflow-y: auto; background: #111; border-radius: 6px; border: 1px solid #333; margin-bottom: 10px; }
+        .frame-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid #222; font-size: 11px; }
+        .frame-item:last-child { border-bottom: none; }
+        .frame-info { cursor: pointer; color: var(--cyan); flex: 1; }
+        .del-btn { background: var(--primary); color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px; }
+
         .slider-container { background: #111; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px dashed #444; }
         input[type="range"] { width: 100%; accent-color: var(--cyan); cursor: pointer; }
 
@@ -61,7 +67,7 @@
     <div id="xml-maker" class="container active">
         <div class="editor-layout">
             <div class="canvas-section">
-                <label>PNG</label><input type="file" id="pngIn" accept="image/png">
+                <label>PNG Sprite</label><input type="file" id="pngIn" accept="image/png">
                 <div class="sheet-viewer">
                     <canvas id="mainCanvas"></canvas>
                     <div id="selectionBox"><div id="handle-br"></div></div>
@@ -81,6 +87,12 @@
                     </div>
                     <input type="text" id="frameName" value="idle0000">
                     <button class="btn btn-cyan" onclick="saveFrame()">💾 Guardar Frame</button>
+                    
+                    <label style="margin-top:10px;">Lista de Frames</label>
+                    <div id="frameList">
+                        <div style="padding:15px; color:#444; text-align:center; font-size:10px;">LISTA VACÍA</div>
+                    </div>
+
                     <button class="btn btn-red" onclick="exportXML()">📤 Exportar XML</button>
                 </div>
             </div>
@@ -90,9 +102,10 @@
     <div id="optimizer" class="container">
         <div class="card" style="max-width:500px; margin:auto;">
             <h3 style="color:var(--cyan); text-align:center;">Optimizer</h3>
-            <label>PNG</label><input type="file" id="optPngIn">
-            <label>XML</label><input type="file" id="optXmlIn">
+            <label>PNG Original</label><input type="file" id="optPngIn">
+            <label>XML Original</label><input type="file" id="optXmlIn">
             <div class="slider-container">
+                <label>Escala de Reducción</label>
                 <span style="color:var(--cyan); font-weight:bold; font-size:20px;" id="valScale">0.5</span>
                 <input type="range" id="optScale" min="0.1" max="1.0" step="0.1" value="0.5" oninput="document.getElementById('valScale').innerText=this.value">
             </div>
@@ -102,8 +115,9 @@
 
     <div id="chart-fixer" class="container">
         <div class="card" style="max-width:400px; margin:auto;">
-            <label>JSON</label><input type="file" id="jsonIn">
-            <button class="btn btn-red" onclick="fixChart()">🔧 Fix Chart</button>
+            <h3 style="color:var(--primary); text-align:center;">Chart Fixer</h3>
+            <label>JSON de Canción</label><input type="file" id="jsonIn">
+            <button class="btn btn-red" onclick="fixChart()">🔧 Reparar Chart</button>
         </div>
     </div>
 </div>
@@ -116,11 +130,11 @@
     const clickSfx = new Audio("https://www.myinstants.com/media/sounds/click-mouse.mp3");
 
     function toggleMusic() {
-        if(bgMusic.paused) { bgMusic.play(); updateUI(true); } 
-        else { bgMusic.pause(); updateUI(false); }
+        if(bgMusic.paused) { bgMusic.play(); updateMusicUI(true); } 
+        else { bgMusic.pause(); updateMusicUI(false); }
     }
-    function updateUI(on) { document.getElementById('musicBtn').innerText = on ? "🎵 ON" : "🎵 OFF"; }
-    document.addEventListener('click', () => { if(bgMusic.paused) bgMusic.play().then(()=>updateUI(true)); }, {once:true});
+    function updateMusicUI(on) { document.getElementById('musicBtn').innerText = on ? "🎵 ON" : "🎵 OFF"; }
+    document.addEventListener('click', () => { if(bgMusic.paused) bgMusic.play().then(()=>updateMusicUI(true)); }, {once:true});
     document.addEventListener('mousedown', (e) => { if(['BUTTON','INPUT','CANVAS'].includes(e.target.tagName)) { clickSfx.currentTime=0; clickSfx.play().catch(()=>{}); }});
 
     function switchTab(e, id) {
@@ -148,9 +162,9 @@
         if(!img.src) return;
         const rect = mCan.getBoundingClientRect();
         const sx = mCan.width/rect.width, sy = mCan.height/rect.height;
-        cur.x = Math.round(((e.clientX - rect.left) * sx) - cur.w/2);
-        cur.y = Math.round(((e.clientY - rect.top) * sy) - cur.h/2);
-        updateUI();
+        cur.x = Math.max(0, Math.round(((e.clientX - rect.left) * sx) - cur.w/2));
+        cur.y = Math.max(0, Math.round(((e.clientY - rect.top) * sy) - cur.h/2));
+        updateVisuals();
     };
 
     function manualUpdate() {
@@ -158,10 +172,10 @@
         cur.y = parseInt(document.getElementById('inpY').value) || 0;
         cur.w = parseInt(document.getElementById('inpW').value) || 10;
         cur.h = parseInt(document.getElementById('inpH').value) || 10;
-        updateUI(false);
+        updateVisuals(false);
     }
 
-    function updateUI(updInp = true) {
+    function updateVisuals(updInp = true) {
         if(updInp) {
             document.getElementById('inpX').value = cur.x; document.getElementById('inpY').value = cur.y;
             document.getElementById('inpW').value = cur.w; document.getElementById('inpH').value = cur.h;
@@ -172,13 +186,11 @@
         sBox.style.left = (cur.x * vx) + 'px'; sBox.style.top = (cur.y * vy) + 'px';
         sBox.style.width = (cur.w * vx) + 'px'; sBox.style.height = (cur.h * vy) + 'px';
         
-        // Preview Estático
         sCan.width = cur.w; sCan.height = cur.h;
         sCtx.imageSmoothingEnabled = false;
-        sCtx.drawImage(img, cur.x, cur.y, cur.w, cur.h, 0, 0, cur.w, cur.h);
+        if(img.src) sCtx.drawImage(img, cur.x, cur.y, cur.w, cur.h, 0, 0, cur.w, cur.h);
     }
 
-    // Bucle de Animación
     setInterval(() => {
         if(!frames.length || !img.src) return;
         animIdx = (animIdx + 1) % frames.length;
@@ -191,20 +203,53 @@
 
     function saveFrame() {
         if(!img.src) return;
-        const name = document.getElementById('frameName');
-        frames.push({...cur, name: name.value});
-        name.value = name.value.replace(/(\d+)/, (v) => (parseInt(v)+1).toString().padStart(v.length, '0'));
+        const nameInp = document.getElementById('frameName');
+        frames.push({...cur, name: nameInp.value});
+        nameInp.value = nameInp.value.replace(/(\d+)/, (v) => (parseInt(v)+1).toString().padStart(v.length, '0'));
+        renderFrameList();
         draw();
-        status("Frame " + frames.length + " guardado");
+        status("Frame guardado (" + frames.length + ")");
+    }
+
+    function renderFrameList() {
+        const list = document.getElementById('frameList');
+        if(frames.length === 0) {
+            list.innerHTML = '<div style="padding:15px; color:#444; text-align:center; font-size:10px;">LISTA VACÍA</div>';
+            return;
+        }
+        list.innerHTML = frames.map((f, i) => `
+            <div class="frame-item">
+                <span class="frame-info" onclick="loadFrame(${i})">${i}. ${f.name} <small>(${f.w}x${f.h})</small></span>
+                <button class="del-btn" onclick="deleteFrame(${i})">BORRAR</button>
+            </div>
+        `).join('');
+    }
+
+    function loadFrame(i) {
+        const f = frames[i];
+        cur = { x: f.x, y: f.y, w: f.w, h: f.h };
+        document.getElementById('frameName').value = f.name;
+        updateVisuals();
+    }
+
+    function deleteFrame(i) {
+        frames.splice(i, 1);
+        renderFrameList();
+        draw();
+        status("Frame eliminado");
     }
 
     function draw() {
-        mCtx.clearRect(0,0,mCan.width, mCan.height); mCtx.drawImage(img, 0,0);
-        mCtx.strokeStyle = "red"; mCtx.lineWidth = 2;
+        if(!img.src) return;
+        mCtx.clearRect(0,0,mCan.width, mCan.height); 
+        mCtx.drawImage(img, 0,0);
+        mCtx.strokeStyle = "#00ff00"; 
+        mCtx.lineWidth = 2;
         frames.forEach(f => mCtx.strokeRect(f.x, f.y, f.w, f.h));
     }
 
     function exportXML() {
+        if(!frames.length) return alert("No hay frames");
         let xml = '<?xml version="1.0" encoding="utf-8"?>\n<TextureAtlas imagePath="sprite.png">\n';
         frames.forEach(f => xml += `  <SubTexture name="${f.name}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}"/>\n`);
         saveFile(xml + '</TextureAtlas>', "sprite.xml", "text/xml");
@@ -219,11 +264,12 @@
         const tImg = new Image(); tImg.src = URL.createObjectURL(pFile);
         await new Promise(r => tImg.onload = r);
         const c = document.createElement('canvas');
-        c.width = Math.round(tImg.width * scale); c.height = Math.round(tImg.height * scale);
+        c.width = Math.max(1, Math.round(tImg.width * scale)); 
+        c.height = Math.max(1, Math.round(tImg.height * scale));
         const ctx = c.getContext('2d');
         ctx.imageSmoothingEnabled = false;
         ctx.drawImage(tImg, 0, 0, c.width, c.height);
-        c.toBlob(b => saveFile(b, "opt.png", "image/png"));
+        c.toBlob(b => saveFile(b, "optimized.png", "image/png"));
         const reader = new FileReader();
         reader.onload = (e) => {
             const xml = new DOMParser().parseFromString(e.target.result, "text/xml");
@@ -233,10 +279,31 @@
                     if(t.getAttribute(a)) t.setAttribute(a, Math.round(t.getAttribute(a) * scale));
                 });
             }
-            saveFile(new XMLSerializer().serializeToString(xml), "opt.xml", "text/xml");
-            status("Listo");
+            saveFile(new XMLSerializer().serializeToString(xml), "optimized.xml", "text/xml");
+            status("Optimización completada");
         };
         reader.readAsText(xFile);
+    }
+
+    function fixChart() {
+        const file = document.getElementById('jsonIn').files[0];
+        if(!file) return alert("Selecciona un JSON");
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            let data = JSON.parse(e.target.result);
+            let song = data.song ? data.song : data;
+            // Lógica simple de fix (ejemplo: asegurar que notes es un array)
+            if(song.notes) {
+                song.notes.forEach(section => {
+                    if(section.sectionNotes) {
+                        section.sectionNotes.forEach(n => { if(n[1] < 0) n[1] = 0; });
+                    }
+                });
+                saveFile(JSON.stringify(data), "fixed_chart.json", "application/json");
+                status("Chart reparado");
+            }
+        };
+        reader.readAsText(file);
     }
 
     function saveFile(content, name, type) {
@@ -247,20 +314,18 @@
 
     function status(m) { document.getElementById('status').innerText = "✓ " + m.toUpperCase(); }
 
+    // Resize Logic
     let isRez = false;
     document.getElementById('handle-br').addEventListener('mousedown', (e) => { e.stopPropagation(); isRez = true; });
-    document.getElementById('handle-br').addEventListener('touchstart', (e) => { e.stopPropagation(); isRez = true; });
     window.addEventListener('mousemove', (e) => {
         if(!isRez) return;
         const rect = mCan.getBoundingClientRect();
         const sx = mCan.width/rect.width, sy = mCan.height/rect.height;
-        cur.w = Math.round(((e.clientX - rect.left) * sx) - cur.x);
-        cur.h = Math.round(((e.clientY - rect.top) * sy) - cur.y);
-        updateUI();
+        cur.w = Math.max(5, Math.round(((e.clientX - rect.left) * sx) - cur.x));
+        cur.h = Math.max(5, Math.round(((e.clientY - rect.top) * sy) - cur.y));
+        updateVisuals();
     });
     window.addEventListener('mouseup', () => isRez = false);
-    window.addEventListener('touchend', () => isRez = false);
 </script>
 </body>
 </html>
-
