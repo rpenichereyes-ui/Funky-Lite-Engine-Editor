@@ -23,27 +23,26 @@
         @media (min-width: 900px) { .editor-layout { flex-direction: row; align-items: flex-start; } .canvas-section { flex: 2; } .control-section { flex: 1; position: sticky; top: 10px; } }
 
         .sheet-viewer { background: #000; height: 45vh; overflow: auto; position: relative; border: 1px solid #333; border-radius: 8px; background-image: conic-gradient(#111 90deg, #181818 90deg 180deg, #111 180deg 270deg, #181818 270deg); background-size: 20px 20px; }
-        #mainCanvas { display: block; image-rendering: pixelated; }
+        #mainCanvas { display: block; }
 
         .preview-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 10px; }
         .preview-box { background: #000; border: 1px solid #444; border-radius: 8px; padding: 5px; text-align: center; }
-        .p-canvas { width: 100%; height: 100px; image-rendering: pixelated; object-fit: contain; background: transparent; }
+        .p-canvas { width: 100%; height: 100px; object-fit: contain; background: transparent; }
 
         .card { background: var(--card); border-radius: 10px; padding: 15px; border: 1px solid #222; margin-bottom: 15px; }
         label { font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 5px; }
         input { width: 100%; background: #222; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; margin-bottom: 10px; }
         
-        /* Lista de Frames */
         #frameList { max-height: 150px; overflow-y: auto; background: #111; border-radius: 6px; border: 1px solid #333; margin-bottom: 10px; }
         .frame-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid #222; font-size: 11px; }
         .frame-item:last-child { border-bottom: none; }
         .frame-info { cursor: pointer; color: var(--cyan); flex: 1; }
-        .del-btn { background: var(--primary); color: white; border: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 10px; }
+        .del-btn { background: var(--primary); color: white; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 10px; font-weight: bold; }
 
         .slider-container { background: #111; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px dashed #444; }
         input[type="range"] { width: 100%; accent-color: var(--cyan); cursor: pointer; }
 
-        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 12px; transition: 0.2s; }
+        .btn { width: 100%; padding: 14px; border: none; border-radius: 8px; font-weight: bold; cursor: pointer; text-transform: uppercase; font-size: 12px; transition: 0.2s; display: flex; align-items: center; justify-content: center; gap: 8px; }
         .btn-cyan { background: var(--cyan); color: #000; margin-bottom: 8px; }
         .btn-red { background: var(--primary); color: #fff; }
 
@@ -55,7 +54,7 @@
 </head>
 <body>
 
-<button class="music-ctrl" id="musicBtn" onclick="toggleMusic()">🎵 AUDIO: OFF</button>
+<button class="music-ctrl" id="musicBtn" onclick="toggleMusic()">🔇 AUDIO: OFF</button>
 
 <nav class="nav-tabs">
     <button class="tab-btn active" onclick="switchTab(event, 'xml-maker')">Maker</button>
@@ -67,7 +66,7 @@
     <div id="xml-maker" class="container active">
         <div class="editor-layout">
             <div class="canvas-section">
-                <label>PNG Sprite</label><input type="file" id="pngIn" accept="image/png">
+                <label>🖼️ PNG Sprite</label><input type="file" id="pngIn" accept="image/png">
                 <div class="sheet-viewer">
                     <canvas id="mainCanvas"></canvas>
                     <div id="selectionBox"><div id="handle-br"></div></div>
@@ -88,9 +87,9 @@
                     <input type="text" id="frameName" value="idle0000">
                     <button class="btn btn-cyan" onclick="saveFrame()">💾 Guardar Frame</button>
                     
-                    <label style="margin-top:10px;">Lista de Frames</label>
+                    <label style="margin-top:10px;">📋 Lista de Frames</label>
                     <div id="frameList">
-                        <div style="padding:15px; color:#444; text-align:center; font-size:10px;">LISTA VACÍA</div>
+                        <div style="padding:15px; color:#444; text-align:center; font-size:10px;">📭 LISTA VACÍA</div>
                     </div>
 
                     <button class="btn btn-red" onclick="exportXML()">📤 Exportar XML</button>
@@ -101,7 +100,7 @@
 
     <div id="optimizer" class="container">
         <div class="card" style="max-width:500px; margin:auto;">
-            <h3 style="color:var(--cyan); text-align:center;">Optimizer</h3>
+            <h3 style="color:var(--cyan); text-align:center;">⚡ Optimizer</h3>
             <label>PNG Original</label><input type="file" id="optPngIn">
             <label>XML Original</label><input type="file" id="optXmlIn">
             <div class="slider-container">
@@ -115,9 +114,9 @@
 
     <div id="chart-fixer" class="container">
         <div class="card" style="max-width:400px; margin:auto;">
-            <h3 style="color:var(--primary); text-align:center;">Chart Fixer</h3>
+            <h3 style="color:var(--primary); text-align:center;">🔧 Chart Fixer</h3>
             <label>JSON de Canción</label><input type="file" id="jsonIn">
-            <button class="btn btn-red" onclick="fixChart()">🔧 Reparar Chart</button>
+            <button class="btn btn-red" onclick="fixChart()">🛠️ Reparar Chart</button>
         </div>
     </div>
 </div>
@@ -129,13 +128,33 @@
     bgMusic.loop = true; bgMusic.volume = 0.4;
     const clickSfx = new Audio("https://www.myinstants.com/media/sounds/click-mouse.mp3");
 
+    let audioUnlocked = false;
+
+    // Fix para políticas de navegador (Unlock Audio Context)
+    function initAudio() {
+        if (audioUnlocked) return;
+        bgMusic.play().then(() => {
+            bgMusic.pause();
+            audioUnlocked = true;
+            status("AUDIO CONFIGURADO");
+        }).catch(() => console.log("Esperando interacción..."));
+    }
+
     function toggleMusic() {
+        initAudio();
         if(bgMusic.paused) { bgMusic.play(); updateMusicUI(true); } 
         else { bgMusic.pause(); updateMusicUI(false); }
     }
-    function updateMusicUI(on) { document.getElementById('musicBtn').innerText = on ? "🎵 ON" : "🎵 OFF"; }
-    document.addEventListener('click', () => { if(bgMusic.paused) bgMusic.play().then(()=>updateMusicUI(true)); }, {once:true});
-    document.addEventListener('mousedown', (e) => { if(['BUTTON','INPUT','CANVAS'].includes(e.target.tagName)) { clickSfx.currentTime=0; clickSfx.play().catch(()=>{}); }});
+
+    function updateMusicUI(on) { document.getElementById('musicBtn').innerText = on ? "🔊 AUDIO: ON" : "🔇 AUDIO: OFF"; }
+
+    document.addEventListener('mousedown', (e) => {
+        initAudio();
+        if(['BUTTON','INPUT','CANVAS'].includes(e.target.tagName)) {
+            clickSfx.currentTime = 0;
+            clickSfx.play().catch(() => {});
+        }
+    });
 
     function switchTab(e, id) {
         document.querySelectorAll('.container').forEach(c => c.classList.remove('active'));
@@ -153,9 +172,19 @@
     const sBox = document.getElementById('selectionBox');
 
     document.getElementById('pngIn').onchange = (e) => {
+        const file = e.target.files[0];
+        if(!file) return;
         const r = new FileReader();
-        r.onload = (ev) => { img.onload = () => { mCan.width = img.width; mCan.height = img.height; draw(); }; img.src = ev.target.result; };
-        r.readAsDataURL(e.target.files[0]);
+        r.onload = (ev) => { 
+            img.onload = () => { 
+                mCan.width = img.width; 
+                mCan.height = img.height; 
+                draw(); 
+                status("IMAGEN CARGADA: " + img.width + "x" + img.height);
+            }; 
+            img.src = ev.target.result; 
+        };
+        r.readAsDataURL(file);
     };
 
     mCan.onmousedown = (e) => {
@@ -208,19 +237,19 @@
         nameInp.value = nameInp.value.replace(/(\d+)/, (v) => (parseInt(v)+1).toString().padStart(v.length, '0'));
         renderFrameList();
         draw();
-        status("Frame guardado (" + frames.length + ")");
+        status("FRAME GUARDADO (" + frames.length + ")");
     }
 
     function renderFrameList() {
         const list = document.getElementById('frameList');
         if(frames.length === 0) {
-            list.innerHTML = '<div style="padding:15px; color:#444; text-align:center; font-size:10px;">LISTA VACÍA</div>';
+            list.innerHTML = '<div style="padding:15px; color:#444; text-align:center; font-size:10px;">📭 LISTA VACÍA</div>';
             return;
         }
         list.innerHTML = frames.map((f, i) => `
             <div class="frame-item">
-                <span class="frame-info" onclick="loadFrame(${i})">${i}. ${f.name} <small>(${f.w}x${f.h})</small></span>
-                <button class="del-btn" onclick="deleteFrame(${i})">BORRAR</button>
+                <span class="frame-info" onclick="loadFrame(${i})">🖼️ ${i}. ${f.name} <small>(${f.w}x${f.h})</small></span>
+                <button class="del-btn" onclick="deleteFrame(${i})">🗑️ BORRAR</button>
             </div>
         `).join('');
     }
@@ -236,7 +265,7 @@
         frames.splice(i, 1);
         renderFrameList();
         draw();
-        status("Frame eliminado");
+        status("FRAME ELIMINADO");
     }
 
     function draw() {
@@ -253,6 +282,7 @@
         let xml = '<?xml version="1.0" encoding="utf-8"?>\n<TextureAtlas imagePath="sprite.png">\n';
         frames.forEach(f => xml += `  <SubTexture name="${f.name}" x="${f.x}" y="${f.y}" width="${f.w}" height="${f.h}"/>\n`);
         saveFile(xml + '</TextureAtlas>', "sprite.xml", "text/xml");
+        status("XML EXPORTADO");
     }
 
     async function processOpt() {
@@ -260,7 +290,7 @@
         const xFile = document.getElementById('optXmlIn').files[0];
         const scale = parseFloat(document.getElementById('optScale').value);
         if(!pFile || !xFile) return alert("Faltan archivos");
-        status("Optimizando...");
+        status("OPTIMIZANDO...");
         const tImg = new Image(); tImg.src = URL.createObjectURL(pFile);
         await new Promise(r => tImg.onload = r);
         const c = document.createElement('canvas');
@@ -280,7 +310,7 @@
                 });
             }
             saveFile(new XMLSerializer().serializeToString(xml), "optimized.xml", "text/xml");
-            status("Optimización completada");
+            status("OPTIMIZACIÓN COMPLETADA");
         };
         reader.readAsText(xFile);
     }
@@ -290,18 +320,19 @@
         if(!file) return alert("Selecciona un JSON");
         const reader = new FileReader();
         reader.onload = (e) => {
-            let data = JSON.parse(e.target.result);
-            let song = data.song ? data.song : data;
-            // Lógica simple de fix (ejemplo: asegurar que notes es un array)
-            if(song.notes) {
-                song.notes.forEach(section => {
-                    if(section.sectionNotes) {
-                        section.sectionNotes.forEach(n => { if(n[1] < 0) n[1] = 0; });
-                    }
-                });
-                saveFile(JSON.stringify(data), "fixed_chart.json", "application/json");
-                status("Chart reparado");
-            }
+            try {
+                let data = JSON.parse(e.target.result);
+                let song = data.song ? data.song : data;
+                if(song.notes) {
+                    song.notes.forEach(section => {
+                        if(section.sectionNotes) {
+                            section.sectionNotes.forEach(n => { if(n[1] < 0) n[1] = 0; });
+                        }
+                    });
+                    saveFile(JSON.stringify(data), "fixed_chart.json", "application/json");
+                    status("CHART REPARADO");
+                }
+            } catch(err) { alert("Error al leer el JSON"); }
         };
         reader.readAsText(file);
     }
