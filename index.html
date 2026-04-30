@@ -33,11 +33,11 @@
         label { font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 5px; }
         input { width: 100%; background: #222; border: 1px solid #444; color: #fff; padding: 10px; border-radius: 6px; margin-bottom: 10px; }
         
-        #frameList { max-height: 150px; overflow-y: auto; background: #111; border-radius: 6px; border: 1px solid #333; margin-bottom: 10px; }
+        #frameList, #packList { max-height: 200px; overflow-y: auto; background: #111; border-radius: 6px; border: 1px solid #333; margin-bottom: 10px; }
         .frame-item { display: flex; align-items: center; justify-content: space-between; padding: 8px; border-bottom: 1px solid #222; font-size: 11px; }
         .frame-item:last-child { border-bottom: none; }
-        .frame-info { cursor: pointer; color: var(--cyan); flex: 1; }
-        .del-btn { background: var(--primary); color: white; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 10px; font-weight: bold; }
+        .frame-info { cursor: pointer; color: var(--cyan); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .del-btn { background: var(--primary); color: white; border: none; border-radius: 4px; padding: 6px 10px; cursor: pointer; font-size: 10px; font-weight: bold; margin-left: 5px; }
 
         .slider-container { background: #111; padding: 15px; border-radius: 8px; margin-bottom: 15px; text-align: center; border: 1px dashed #444; }
         input[type="range"] { width: 100%; accent-color: var(--cyan); cursor: pointer; }
@@ -58,6 +58,7 @@
 
 <nav class="nav-tabs">
     <button class="tab-btn active" onclick="switchTab(event, 'xml-maker')">Maker</button>
+    <button class="tab-btn" onclick="switchTab(event, 'xml-packer')">Packer</button>
     <button class="tab-btn" onclick="switchTab(event, 'optimizer')">Optimizer</button>
     <button class="tab-btn" onclick="switchTab(event, 'chart-fixer')">Fixer</button>
 </nav>
@@ -98,6 +99,22 @@
         </div>
     </div>
 
+    <div id="xml-packer" class="container">
+        <div class="card" style="max-width:500px; margin:auto;">
+            <h3 style="color:var(--accent); text-align:center;">📦 Sprite Packer</h3>
+            <p style="font-size: 10px; color: #888; margin-bottom: 15px; text-align: center;">Selecciona varios PNGs individuales para crear un Spritesheet automático.</p>
+            
+            <label>Seleccionar archivos</label>
+            <input type="file" id="packIn" accept="image/png" multiple onchange="handlePackSelect(this)">
+            
+            <div id="packList">
+                <div style="padding:15px; color:#444; text-align:center; font-size:10px;">📭 NINGÚN ARCHIVO</div>
+            </div>
+
+            <button class="btn btn-cyan" onclick="generateAtlas()">🔨 Generar XML + PNG</button>
+        </div>
+    </div>
+
     <div id="optimizer" class="container">
         <div class="card" style="max-width:500px; margin:auto;">
             <h3 style="color:var(--cyan); text-align:center;">⚡ Optimizer</h3>
@@ -129,15 +146,15 @@
     const clickSfx = new Audio("https://www.myinstants.com/media/sounds/click-mouse.mp3");
 
     let audioUnlocked = false;
+    let packFiles = []; // Almacén para los archivos del Packer
 
-    // Fix para políticas de navegador (Unlock Audio Context)
     function initAudio() {
         if (audioUnlocked) return;
         bgMusic.play().then(() => {
             bgMusic.pause();
             audioUnlocked = true;
             status("AUDIO CONFIGURADO");
-        }).catch(() => console.log("Esperando interacción..."));
+        }).catch(() => {});
     }
 
     function toggleMusic() {
@@ -163,7 +180,84 @@
         e.currentTarget.classList.add('active');
     }
 
-    // MAKER LOGIC
+    // --- PACKER LOGIC ---
+    function handlePackSelect(input) {
+        const newFiles = Array.from(input.files);
+        // Filtrar duplicados por nombre
+        newFiles.forEach(f => {
+            if(!packFiles.find(existing => existing.name === f.name)) {
+                packFiles.push(f);
+            }
+        });
+        renderPackList();
+        input.value = ""; // Reset para permitir volver a elegir el mismo
+    }
+
+    function renderPackList() {
+        const list = document.getElementById('packList');
+        if(packFiles.length === 0) {
+            list.innerHTML = '<div style="padding:15px; color:#444; text-align:center; font-size:10px;">📭 NINGÚN ARCHIVO</div>';
+            return;
+        }
+        list.innerHTML = packFiles.map((f, i) => `
+            <div class="frame-item">
+                <span class="frame-info">📄 ${f.name}</span>
+                <button class="del-btn" onclick="removePackFile(${i})">BORRAR</button>
+            </div>
+        `).join('');
+    }
+
+    function removePackFile(index) {
+        packFiles.splice(index, 1);
+        renderPackList();
+        status("ARCHIVO ELIMINADO");
+    }
+
+    async function generateAtlas() {
+        if(packFiles.length === 0) return alert("Agrega archivos PNG primero");
+        status("GENERANDO ATLAS...");
+
+        const loaded = [];
+        for(let file of packFiles) {
+            const data = await new Promise(resolve => {
+                const img = new Image();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    img.onload = () => resolve({img, name: file.name.replace('.png', '')});
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(file);
+            });
+            loaded.push(data);
+        }
+
+        // Algoritmo de empaquetado simple (vertical)
+        let totalH = 0, maxW = 0;
+        loaded.forEach(d => {
+            totalH += d.img.height;
+            if(d.img.width > maxW) maxW = d.img.width;
+        });
+
+        const canvas = document.createElement('canvas');
+        canvas.width = maxW; canvas.height = totalH;
+        const ctx = canvas.getContext('2d');
+        let currentY = 0;
+        let xml = '<?xml version="1.0" encoding="utf-8"?>\n<TextureAtlas imagePath="sprite.png">\n';
+
+        loaded.forEach(d => {
+            ctx.drawImage(d.img, 0, currentY);
+            xml += `  <SubTexture name="${d.name}" x="0" y="${currentY}" width="${d.img.width}" height="${d.img.height}"/>\n`;
+            currentY += d.img.height;
+        });
+
+        xml += '</TextureAtlas>';
+        
+        canvas.toBlob(b => saveFile(b, "sprite.png", "image/png"));
+        saveFile(xml, "sprite.xml", "text/xml");
+        status("ATLAS COMPLETADO");
+    }
+
+    // --- MAKER LOGIC ---
     let img = new Image(), frames = [], animIdx = 0;
     let cur = { x: 0, y: 0, w: 100, h: 100 };
     const mCan = document.getElementById('mainCanvas'), mCtx = mCan.getContext('2d');
@@ -315,7 +409,7 @@
         reader.readAsText(xFile);
     }
 
-    function fixChart() {
+        function fixChart() {
         const file = document.getElementById('jsonIn').files[0];
         if(!file) return alert("Selecciona un JSON");
         const reader = new FileReader();
@@ -341,11 +435,11 @@
         const b = (content instanceof Blob) ? content : new Blob([content], {type});
         const u = URL.createObjectURL(b);
         const a = document.createElement('a'); a.href = u; a.download = name; a.click();
+        setTimeout(() => URL.revokeObjectURL(u), 1000);
     }
 
     function status(m) { document.getElementById('status').innerText = "✓ " + m.toUpperCase(); }
 
-    // Resize Logic
     let isRez = false;
     document.getElementById('handle-br').addEventListener('mousedown', (e) => { e.stopPropagation(); isRez = true; });
     window.addEventListener('mousemove', (e) => {
