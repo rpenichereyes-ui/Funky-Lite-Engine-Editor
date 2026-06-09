@@ -213,49 +213,69 @@
         status("ARCHIVO ELIMINADO");
     }
 
-    async function generateAtlas() {
-        if(packFiles.length === 0) return alert("Agrega archivos PNG primero");
-        status("GENERANDO ATLAS...");
+async function generateAtlas() {
+    if(packFiles.length === 0) return alert("Agrega archivos PNG primero");
+    status("GENERANDO ATLAS CUADRADO...");
 
-        const loaded = [];
-        for(let file of packFiles) {
-            const data = await new Promise(resolve => {
-                const img = new Image();
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    img.onload = () => resolve({img, name: file.name.replace('.png', '')});
-                    img.src = e.target.result;
-                }
-                reader.readAsDataURL(file);
-            });
-            loaded.push(data);
-        }
-
-        // Algoritmo de empaquetado simple (vertical)
-        let totalH = 0, maxW = 0;
-        loaded.forEach(d => {
-            totalH += d.img.height;
-            if(d.img.width > maxW) maxW = d.img.width;
+    const loaded = [];
+    for(let file of packFiles) {
+        const data = await new Promise(resolve => {
+            const img = new Image();
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                img.onload = () => resolve({img, name: file.name.replace('.png', ''), w: img.width, h: img.height});
+                img.src = e.target.result;
+            }
+            reader.readAsDataURL(file);
         });
-
-        const canvas = document.createElement('canvas');
-        canvas.width = maxW; canvas.height = totalH;
-        const ctx = canvas.getContext('2d');
-        let currentY = 0;
-        let xml = '<?xml version="1.0" encoding="utf-8"?>\n<TextureAtlas imagePath="sprite.png">\n';
-
-        loaded.forEach(d => {
-            ctx.drawImage(d.img, 0, currentY);
-            xml += `  <SubTexture name="${d.name}" x="0" y="${currentY}" width="${d.img.width}" height="${d.img.height}"/>\n`;
-            currentY += d.img.height;
-        });
-
-        xml += '</TextureAtlas>';
-        
-        canvas.toBlob(b => saveFile(b, "sprite.png", "image/png"));
-        saveFile(xml, "sprite.xml", "text/xml");
-        status("ATLAS COMPLETADO");
+        loaded.push(data);
     }
+
+    // 1. Calcular tamaño aproximado (sumar áreas y sacar raíz)
+    let totalArea = loaded.reduce((acc, d) => acc + (d.w * d.h), 0);
+    let side = Math.ceil(Math.sqrt(totalArea));
+    
+    // 2. Ordenar por altura para un mejor encaje (Heurística simple)
+    loaded.sort((a, b) => b.h - a.h);
+
+    const canvas = document.createElement('canvas');
+    let ctx = canvas.getContext('2d');
+    
+    // 3. Empaquetado simple tipo "shelf" (estantería)
+    let x = 0, y = 0, rowH = 0;
+    let finalW = 0, finalH = 0;
+
+    // Primero calculamos posiciones
+    loaded.forEach(d => {
+        if (x + d.w > side) {
+            x = 0;
+            y += rowH;
+            rowH = 0;
+        }
+        d.posX = x;
+        d.posY = y;
+        x += d.w;
+        rowH = Math.max(rowH, d.h);
+        finalW = Math.max(finalW, x);
+        finalH = Math.max(finalH, y + d.h);
+    });
+
+    // 4. Dibujar en el canvas final
+    canvas.width = finalW;
+    canvas.height = finalH;
+    let xml = '<?xml version="1.0" encoding="utf-8"?>\n<TextureAtlas imagePath="sprite.png">\n';
+
+    loaded.forEach(d => {
+        ctx.drawImage(d.img, d.posX, d.posY);
+        xml += `  <SubTexture name="${d.name}" x="${d.posX}" y="${d.posY}" width="${d.w}" height="${d.h}"/>\n`;
+    });
+
+    xml += '</TextureAtlas>';
+    
+    canvas.toBlob(b => saveFile(b, "sprite.png", "image/png"));
+    saveFile(xml, "sprite.xml", "text/xml");
+    status("ATLAS CUADRADO GENERADO: " + finalW + "x" + finalH);
+}
 
     // --- MAKER LOGIC ---
     let img = new Image(), frames = [], animIdx = 0;
